@@ -1,0 +1,32 @@
+package com.example.av.url_shortening.model;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.io.Serializable;
+import java.time.LocalDateTime;
+
+@Entity
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class Url implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    @GeneratedValue
+    private long id;
+
+    @Lob
+    private String originalUrl;
+
+    private String shortLink;
+    private LocalDateTime creationDate;
+    private LocalDateTime expirationDate;
+}
