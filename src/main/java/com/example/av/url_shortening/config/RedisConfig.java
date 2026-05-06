@@ -21,10 +21,6 @@ import java.time.Duration;
 @EnableCaching
 public class RedisConfig {
 
-    /**
-     * RedisTemplate for direct Redis operations (used in UrlServiceImpl).
-     * Keys are plain strings; values are JSON-serialized objects.
-     */
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
@@ -33,7 +29,7 @@ public class RedisConfig {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        // Store class type info so deserialization knows the target type
+
         mapper.activateDefaultTyping(
                 mapper.getPolymorphicTypeValidator(),
                 ObjectMapper.DefaultTyping.NON_FINAL
@@ -49,10 +45,6 @@ public class RedisConfig {
         return template;
     }
 
-    /**
-     * RedisCacheManager wires up Spring's @Cacheable / @CacheEvict annotations.
-     * TTL matches the URL expiration default (60 seconds).
-     */
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         ObjectMapper mapper = new ObjectMapper();
