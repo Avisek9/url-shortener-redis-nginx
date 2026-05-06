@@ -1,98 +1,186 @@
-# URL Shortening Service
+# URL Shortener — Spring Boot + Redis + Nginx
 
-A REST-based URL Shortening Service developed using Spring Boot that generates unique short links from long URLs and handles fast and reliable redirection using hashing techniques.
+A production-ready URL shortening service built with Spring Boot, featuring Redis caching for high-speed lookups and Nginx load balancing across multiple app instances.
 
-This project demonstrates backend API design, hashing-based ID generation, database integration, and redirection handling.
+---
+
+## Architecture
+
+```
+Client → Nginx :9090 → App Instance 1 :8081 ─┐
+                        App Instance 2 :8082 ─┤→ Redis :6379
+                        App Instance 3 :8083 ─┘
+                                ↓
+                           H2 Database
+```
 
 ---
 
 ## Features
 
-- Generate unique short URLs from long URLs  
-- Redirect short URLs to their original destination  
-- Uses Murmur3 hashing algorithm for fast and collision-resistant URL generation  
-- Persistent storage of original and shortened URLs using H2 (in-memory)  
-- Easily configurable to switch to MySQL for production use  
-- RESTful API design for easy integration  
-- Tested redirection accuracy and edge cases using Postman  
+- Generate unique short URLs from long URLs
+- Fast redirection via short link lookup
+- Murmur3 hashing algorithm for collision-resistant URL generation
+- Redis caching — repeat lookups skip the database entirely
+- Cache TTL automatically matches URL expiration time
+- Nginx load balancing across 3 Spring Boot instances using least-connection strategy
+- Graceful Redis fallback — if Redis is down, requests fall through to H2
+- URL expiration support with configurable expiry date
+- RESTful API design tested with Postman
 
 ---
 
 ## Technology Stack
 
-### Backend
-- Java  
-- Spring Boot  
-- Guava  
-- Murmur3 Hashing Algorithm  
-- Maven  
-
-### Database
-- H2 (Development)  
-- MySQL (Optional)  
-
-### Tools and Testing
-- Postman  
-- Git  
-- GitHub  
+| Layer | Technology |
+|---|---|
+| Backend | Java 21, Spring Boot 3.2.5 |
+| Caching | Redis, Spring Cache |
+| Load Balancer | Nginx (least_conn) |
+| Hashing | Murmur3 via Google Guava |
+| Database | H2 (in-memory) |
+| Build Tool | Maven |
+| Testing | Postman |
 
 ---
 
-## Setup Instructions
+## Prerequisites
 
-Follow the steps below to run this project locally.
+- Java 21
+- Maven
+- Redis
+- Nginx
 
-### Prerequisites
+### Install on macOS
 
-- Java  
-- Maven  
-- Git  
-
----
-
-### Application Setup
-
-git clone https://github.com/Avisek9/url-shortening-service.git
-
-cd url-shortening-service 
-
-mvn clean install  
-
-mvn spring-boot:run  
-
-The application will start on:
-
-http://localhost:8080  
-
-H2 Console (Optional):
-
-http://localhost:8080/h2-console  
+```bash
+brew install redis nginx
+brew services start redis
+```
 
 ---
 
-## How It Works
+## Running Locally
 
-- Long URLs are processed using the Murmur3 hashing algorithm  
-- A unique short key is generated using Guava utilities  
-- The original and shortened URLs are stored in the H2 database  
-- When a short URL is accessed, the system performs a fast lookup  
-- The user is redirected to the original URL  
-- All redirection flows and edge cases are validated using Postman  
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/url-shortener-redis-nginx.git
+cd url-shortener-redis-nginx
+```
+
+### 2. Start Redis
+
+```bash
+brew services start redis
+redis-cli ping   # should return PONG
+```
+
+### 3. Configure Nginx
+
+```bash
+mkdir -p /opt/homebrew/etc/nginx/servers
+cp nginx/nginx.conf /opt/homebrew/etc/nginx/servers/url-shortener.conf
+brew services start nginx
+curl http://127.0.0.1:9090/nginx-health   # should return: healthy
+```
+
+### 4. Run 3 app instances
+
+Open 3 terminals and run one in each:
+
+```bash
+# Terminal 1
+SERVER_PORT=8081 ./mvnw spring-boot:run
+
+# Terminal 2
+SERVER_PORT=8082 ./mvnw spring-boot:run
+
+# Terminal 3
+SERVER_PORT=8083 ./mvnw spring-boot:run
+```
+
+Or configure 3 run configurations in IntelliJ IDEA with `SERVER_PORT=8081/8082/8083` as environment variables.
 
 ---
 
-## Switching to MySQL
+## API Reference
 
-- Update database configuration in `application.properties`  
-- Change the JDBC URL, username, and password to your MySQL credentials  
-- Run the application again to use MySQL instead of H2  
+### Generate a short URL
+
+```
+POST http://127.0.0.1:9090/generate
+Content-Type: application/json
+```
+
+**Request body:**
+```json
+{
+    "url": "https://example.com",
+    "expirationDate": "2026-12-31T23:59:59"
+}
+```
+
+**Response:**
+```json
+{
+    "originalUrl": "https://example.com",
+    "shortLink": "1314c06c",
+    "expirationDate": "2026-12-31T23:59:59"
+}
+```
+
+> `expirationDate` is optional. Defaults to 60 seconds from creation if not provided.
+
+---
+
+### Redirect via short link
+
+```
+GET http://127.0.0.1:9090/{shortLink}
+```
+
+Redirects to the original URL if the link exists and has not expired.
+
+---
+
+### Nginx health check
+
+```
+GET http://127.0.0.1:9090/nginx-health
+```
+
+Returns `healthy` if Nginx is running correctly.
+
+---
+
+## How Redis Caching Works
+
+1. On first lookup, the URL is fetched from H2 and stored in Redis with a TTL matching its expiration time
+2. On subsequent lookups, Redis serves the response instantly without touching the database
+3. When a URL is deleted or expires, it is evicted from the Redis cache immediately
+4. If Redis is unavailable, all requests fall through to H2 transparently
+
+---
+
+## H2 Console
+
+Access the in-memory database console at:
+
+```
+http://127.0.0.1:8081/h2-console
+JDBC URL: jdbc:h2:mem:urlshortenerdb
+Username: sa
+Password: (leave blank)
+```
 
 ---
 
 ## Future Enhancements
 
-- Custom short URL aliases  
-- Click analytics dashboard  
-- JWT-based authentication  
-- Rate limiting and abuse protection  
-- URL expiration support  
+- Custom short URL aliases
+- Click analytics dashboard
+- JWT-based authentication
+- Rate limiting and abuse protection
+- PostgreSQL/MySQL support for production
+- Docker Compose setup
